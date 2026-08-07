@@ -2,6 +2,8 @@
 __pycache__/
 *.pyc
 data/
+!data/
+!data/local_dictionary.json
 venv/
 .venv/
 *.db

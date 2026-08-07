@@ -20,8 +20,13 @@ _sqlite_path = None
 def _get_sqlite_path():
     global _sqlite_path
     if _sqlite_path is None:
-        base = os.path.dirname(os.path.abspath(__file__))
-        _sqlite_path = os.path.join(base, "data", "english.db")
+        env_path = os.getenv("DB_SQLITE_PATH", "")
+        if env_path:
+            os.makedirs(os.path.dirname(env_path), exist_ok=True)
+            _sqlite_path = env_path
+        else:
+            base = os.path.dirname(os.path.abspath(__file__))
+            _sqlite_path = os.path.join(base, "data", "english.db")
     return _sqlite_path
 
 
