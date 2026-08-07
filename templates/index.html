@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>考研英语每日阅读</title>
+    <link rel="stylesheet" href="/static/css/style.css?v=8">
+</head>
+<body class="index-page">
+    <!-- Reading progress bar -->
+    <div class="reading-progress" id="reading-progress"></div>
+
+    <!-- Toast container -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <!-- Word tooltip -->
+    <div id="word-tooltip" class="word-tooltip">
+        <div class="tooltip-inner"></div>
+        <div class="tooltip-arrow"></div>
+    </div>
+
+    <!-- Header -->
+    <header class="header" id="header">
+        <div class="header-inner">
+            <div class="header-brand">
+                <div class="brand-icon">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
+                        <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="app-title">每日阅读</h1>
+                    <span class="app-subtitle">考研英语</span>
+                </div>
+            </div>
+            <nav class="header-nav">
+                <a href="/flashcard" class="nav-link">闪卡</a>
+                <a href="/writing" class="nav-link">写作</a>
+                <a href="/mistakes" class="nav-link">错题</a>
+                <a href="/vocabulary" class="nav-link">单词本</a>
+                <span class="date-badge" id="date-badge"></span>
+                <select id="archive-select" class="nav-select">
+                    <option value="">往期</option>
+                </select>
+                <button id="stats-btn" class="nav-btn" title="学习统计">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
+                    </svg>
+                </button>
+                <button id="theme-toggle" class="theme-toggle" title="暗色模式">🌙</button>
+            </nav>
+        </div>
+    </header>
+
+    <main class="main">
+        <!-- Loading skeleton -->
+        <div id="loading" class="loading-area">
+            <div class="skeleton skeleton-title"></div>
+            <div class="skeleton skeleton-meta"></div>
+            <div class="skeleton skeleton-line"></div>
+            <div class="skeleton skeleton-line"></div>
+            <div class="skeleton skeleton-line w-80"></div>
+        </div>
+
+        <div id="error-area" class="error-area" style="display:none;"></div>
+
+        <!-- Check-in — stamp style -->
+        <div class="checkin-row" id="checkin-row" style="display:none;">
+            <button class="stamp-btn" id="stamp-btn" title="今日打卡">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            </button>
+            <div class="streak-display">
+                <span class="streak-number" id="streak-count">0</span>
+                <span class="streak-label">天连续学习</span>
+            </div>
+            <span class="heatmap-toggle" id="heatmap-toggle">学习热力图</span>
+        </div>
+        <div class="heatmap-container" id="heatmap-container" style="display:none;"></div>
+
+        <!-- Daily learning dashboard -->
+        <section class="daily-dashboard" id="daily-dashboard" aria-label="今日学习路线">
+            <div class="dashboard-intro">
+                <div>
+                    <div class="dashboard-eyebrow">TODAY'S STUDY PATH</div>
+                    <h2 class="dashboard-title">今天，先完成这三步。</h2>
+                    <p class="dashboard-desc">用一篇文章串起阅读、词汇和复习，保持稳定输入。</p>
+                </div>
+                <div class="dashboard-time">
+                    <strong>25</strong>
+                    <span>分钟建议</span>
+                </div>
+            </div>
+
+            <div class="study-path">
+                <a class="path-item path-item-primary" href="#article-section">
+                    <span class="path-index">01</span>
+                    <span class="path-copy">
+                        <strong>完成今日阅读</strong>
+                        <span id="dashboard-article-title">阅读文章并标记生词</span>
+                    </span>
+                    <span class="path-state" id="dashboard-reading-state">核心任务</span>
+                    <svg class="path-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>
+                </a>
+                <a class="path-item" href="/flashcard">
+                    <span class="path-index">02</span>
+                    <span class="path-copy">
+                        <strong>复习闪卡</strong>
+                        <span id="dashboard-flashcard-meta">加载今日待复习单词…</span>
+                    </span>
+                    <span class="path-state" id="dashboard-flashcard-state">待开始</span>
+                    <svg class="path-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>
+                </a>
+                <a class="path-item" href="/mistakes">
+                    <span class="path-index">03</span>
+                    <span class="path-copy">
+                        <strong>回顾错题</strong>
+                        <span id="dashboard-mistake-meta">巩固最近做错的题目</span>
+                    </span>
+                    <span class="path-state" id="dashboard-mistake-state">待复盘</span>
+                    <svg class="path-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>
+                </a>
+            </div>
+
+            <div class="dashboard-footer">
+                <div class="dashboard-metrics" aria-label="学习数据">
+                    <span><strong id="dashboard-word-count">—</strong> 个词汇</span>
+                    <span><strong id="dashboard-exercise-count">—</strong> 次翻译</span>
+                    <span><strong id="dashboard-streak-count">—</strong> 天连续</span>
+                </div>
+                <a class="dashboard-link" href="/writing">去练一篇写作 <span>↗</span></a>
+            </div>
+        </section>
+
+        <div class="learning-layout">
+            <div class="reading-column">
+                <!-- Article content -->
+                <article id="article-section" style="display:none;">
+            <div class="article-hero">
+                <div class="article-badge">今日文章</div>
+                <h2 class="article-title" id="article-title"></h2>
+                <p class="article-title-zh" id="article-title-zh"></p>
+                <div class="article-meta-row">
+                    <span class="meta-tag" id="article-source"></span>
+                    <span class="meta-dot"></span>
+                    <span class="meta-tag" id="article-word-count"></span>
+                    <span class="meta-dot"></span>
+                    <span class="meta-tag" id="article-date"></span>
+                    <span id="article-meta-extra"></span>
+                    <button id="tts-btn" class="tts-btn" title="朗读文章">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+                        朗读
+                    </button>
+                </div>
+            </div>
+
+            <!-- Glossary strip -->
+            <div class="glossary-strip" id="glossary-strip" style="display:none;">
+                <div class="glossary-strip-label">词汇表 · <span id="glossary-count">0</span> 词</div>
+                <div class="glossary-chips" id="glossary-chips"></div>
+            </div>
+
+            <div class="article-body" id="article-body"></div>
+
+            <div class="article-tip">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                点击单词查看本地词库释义 · 点击句子查看翻译 · 按 <kbd>T</kbd> 展开全部翻译
+            </div>
+                </article>
+            </div>
+
+            <aside class="practice-column" aria-label="练习题目">
+                <div class="practice-sticky">
+                    <div class="practice-rail-heading">
+                        <span class="dashboard-eyebrow">PRACTICE RAIL</span>
+                        <span class="practice-rail-note">边读边练</span>
+                    </div>
+
+                    <!-- Translation exercises -->
+                    <section id="exercises-section" class="exercises-section" style="display:none;">
+            <div class="section-header">
+                <h3 class="section-title">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+                    </svg>
+                    翻译练习
+                </h3>
+                <p class="section-desc">翻译以下长难句，AI 批改并给出详细反馈</p>
+            </div>
+            <div id="exercises-container"></div>
+                    </section>
+
+                    <!-- Reading Comprehension Questions -->
+                    <section id="questions-section" class="questions-section" style="display:none;">
+            <div class="section-header">
+                <h3 class="section-title">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                    阅读理解
+                </h3>
+                <p class="section-desc">考研英语五大题型，每题 4 选 1，提交后查看详细解析</p>
+            </div>
+            <div id="questions-container"></div>
+                    </section>
+
+                </div>
+            </aside>
+        </div>
+
+        <!-- Cloze Exercise — separate deep-practice section -->
+        <section id="cloze-section" class="cloze-section cloze-standalone" style="display:none;">
+            <div class="section-header">
+                <h3 class="section-title">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+                    完形填空
+                </h3>
+                <p class="section-desc">先通读文章，再完成 10 道词汇与逻辑选择题</p>
+            </div>
+            <div id="cloze-container"></div>
+        </section>
+    </main>
+
+    <!-- Stats modal -->
+    <div id="stats-modal" class="modal-overlay" style="display:none;">
+        <div class="modal-panel">
+            <div class="modal-head">
+                <h3>学习统计</h3>
+                <button class="modal-close" id="modal-close">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+            </div>
+            <div class="modal-body" id="stats-body"></div>
+        </div>
+    </div>
+
+    <script src="/static/js/tooltip.js?v=8"></script>
+    <script src="/static/js/translate.js?v=8"></script>
+    <script src="/static/js/app.js?v=8"></script>
+</body>
+</html>

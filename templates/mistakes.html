@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>错题本 · 考研英语</title>
+<link rel="stylesheet" href="/static/css/style.css?v=8">
+</head>
+<body>
+<div class="reading-progress" id="reading-progress"></div>
+
+<header class="header">
+<div class="header-inner">
+    <div class="header-brand">
+        <a href="/" style="text-decoration:none;color:inherit;display:flex;align-items:center;gap:10px;">
+            <div class="brand-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            </div>
+            <div>
+                <h1 class="app-title">错题本</h1>
+                <span class="app-subtitle">Mistake Notebook · 查漏补缺</span>
+            </div>
+        </a>
+    </div>
+    <nav class="header-nav">
+        <a href="/flashcard" class="nav-link">闪卡</a>
+        <a href="/writing" class="nav-link">写作</a>
+        <button id="theme-toggle" class="theme-toggle">☀</button>
+    </nav>
+</div>
+</header>
+
+<div class="mistake-container">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px;">
+        <h2 style="font-size:1.2rem;font-weight:700;color:var(--ink);">📋 错题本</h2>
+        <div style="display:flex;gap:8px;align-items:center;">
+            <span id="mistake-stats" style="font-size:0.82rem;color:var(--ink-muted);"></span>
+        </div>
+    </div>
+
+    <div class="mistake-tabs">
+        <button class="mistake-tab active" data-type="">全部</button>
+        <button class="mistake-tab" data-type="reading">阅读理解</button>
+        <button class="mistake-tab" data-type="cloze">完形填空</button>
+    </div>
+
+    <div id="mistake-list"></div>
+    <div id="mistake-pagination" style="display:flex;justify-content:center;align-items:center;gap:12px;margin-top:20px;"></div>
+</div>
+
+<script>
+(() => {
+    "use strict";
+    const $ = (id) => document.getElementById(id);
+    let currentType = "";
+    let currentPage = 1;
+    let totalPages = 1;
+
+    document.addEventListener("DOMContentLoaded", async () => {
+        setupDarkMode();
+        await loadStats();
+        await loadMistakes();
+
+        document.querySelectorAll(".mistake-tab").forEach(tab => {
+            tab.addEventListener("click", function() {
+                document.querySelectorAll(".mistake-tab").forEach(t => t.classList.remove("active"));
+                this.classList.add("active");
+                currentType = this.dataset.type;
+                currentPage = 1;
+                loadMistakes();
+            });
+        });
+    });
+
+    function setupDarkMode() {
+        if (localStorage.getItem("darkMode") === "1") document.body.classList.add("dark");
+        const btn = $("theme-toggle");
+        if (btn) {
+            btn.textContent = document.body.classList.contains("dark") ? "☀" : "🌙";
+            btn.addEventListener("click", () => {
+                document.body.classList.toggle("dark");
+                localStorage.setItem("darkMode", document.body.classList.contains("dark") ? "1" : "0");
+                btn.textContent = document.body.classList.contains("dark") ? "☀" : "🌙";
+            });
+        }
+    }
+
+    async function loadStats() {
+        try {
+            const resp = await fetch("/api/mistakes/stats");
+            const data = await resp.json();
+            const el = $("mistake-stats");
+            if (el) {
+                el.textContent = "共 " + data.total + " 道错题 · " + data.unreviewed + " 道待复习 · 阅读 " + (data.by_type.reading || 0) + " · 完形 " + (data.by_type.cloze || 0);
+            }
+        } catch (e) { /* ignore */ }
+    }
+
+    async function loadMistakes() {
+        const list = $("mistake-list");
+        if (!list) return;
+        list.innerHTML = '<div class="loading-area"><div class="skeleton skeleton-line"></div></div>';
+
+        try {
+            let url = "/api/mistakes?page=" + currentPage + "&per_page=15";
+            if (currentType) url += "&type=" + currentType;
+            const resp = await fetch(url);
+            const data = await resp.json();
+            totalPages = Math.ceil(data.total / data.per_page);
+            currentPage = data.page;
+
+            if (data.mistakes.length === 0) {
+                list.innerHTML = '<div class="mistake-empty">🎉 暂无错题记录<br><span style="font-size:0.85rem;">错题会在你做阅读理解和完形填空时自动收集</span></div>';
+                if ($("mistake-pagination")) $("mistake-pagination").innerHTML = "";
+                return;
+            }
+
+            const typeNames = { reading: "阅读理解", cloze: "完形填空" };
+            list.innerHTML = data.mistakes.map(m => `
+                <div class="mistake-card" id="mc-${m.id}">
+                    <div class="mistake-meta">
+                        <span class="mistake-type-badge mt-${m.mistake_type}">${typeNames[m.mistake_type] || m.mistake_type}</span>
+                        <span class="mistake-date">${new Date(m.created_at).toLocaleDateString("zh-CN")}</span>
+                        ${m.reviewed ? '<span style="font-size:0.7rem;color:var(--green);">✅ 已复习</span>' : ''}
+                    </div>
+                    ${m.question_text ? '<div class="mistake-body">' + escHtml(m.question_text.substring(0, 250)) + '</div>' : ''}
+                    <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;">
+                        <span>你的答案：<span class="mistake-wrong">${escHtml(m.user_wrong_answer || "")}</span></span>
+                        <span>正确答案：<span class="mistake-correct">${escHtml(m.correct_answer || "")}</span></span>
+                    </div>
+                    ${m.explanation ? '<div class="mistake-explain">' + escHtml(m.explanation.substring(0, 500)) + '</div>' : ''}
+                    ${!m.reviewed ? '<button class="mistake-review-btn" onclick="markReviewed(' + m.id + ')">✅ 标记已复习</button>' : ''}
+                </div>
+            `).join("");
+
+            // Pagination
+            const pg = $("mistake-pagination");
+            if (pg && totalPages > 1) {
+                pg.innerHTML = `
+                    <button class="page-btn" onclick="goPage(${currentPage - 1})" ${currentPage <= 1 ? "disabled" : ""}>上一页</button>
+                    <span class="page-info">${currentPage} / ${totalPages}</span>
+                    <button class="page-btn" onclick="goPage(${currentPage + 1})" ${currentPage >= totalPages ? "disabled" : ""}>下一页</button>
+                `;
+            }
+        } catch (e) {
+            list.innerHTML = '<p style="color:var(--red);text-align:center;">加载失败</p>';
+        }
+    }
+
+    window.markReviewed = async function(id) {
+        try {
+            await fetch("/api/mistakes/" + id + "/review", { method: "POST" });
+            const card = document.querySelector("#mc-" + id);
+            if (card) {
+                const btn = card.querySelector(".mistake-review-btn");
+                if (btn) btn.remove();
+                const meta = card.querySelector(".mistake-meta");
+                if (meta) meta.innerHTML += '<span style="font-size:0.7rem;color:var(--green);">✅ 已复习</span>';
+            }
+            await loadStats();
+        } catch (e) { /* ignore */ }
+    };
+
+    window.goPage = function(page) {
+        if (page < 1 || page > totalPages) return;
+        currentPage = page;
+        loadMistakes();
+        window.scrollTo({ top: 0, behavior: "smooth" });
+    };
+
+    function escHtml(s) {
+        if (!s) return "";
+        const d = document.createElement("div");
+        d.textContent = s;
+        return d.innerHTML;
+    }
+})();
+</script>
+</body>
+</html>

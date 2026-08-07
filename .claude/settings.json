@@ -1,0 +1,31 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pkill -f \"python app.py\")",
+      "Bash(python app.py)",
+      "Bash(curl -sI http://127.0.0.1:5000/static/css/style.css)",
+      "Bash(curl -sI http://127.0.0.1:5000/)",
+      "Bash(curl -sI http://127.0.0.1:5000/api/health)",
+      "Bash(python -c ' *)",
+      "Bash(python -c \"from app import app; print\\('OK'\\)\")",
+      "Bash(pkill -f \"python\")",
+      "Bash(curl -s http://127.0.0.1:5000/api/health)",
+      "Bash(curl -s http://127.0.0.1:5000/static/js/app.js)",
+      "Bash(curl -s -D - http://127.0.0.1:5000/static/css/style.css)",
+      "Bash(pkill -f \"python.*app\")",
+      "Bash(taskkill //F //IM python.exe)",
+      "Bash(curl -s -D - http://127.0.0.1:5000/api/health)",
+      "Bash(curl -s -D - http://127.0.0.1:5000/)",
+      "Bash(curl -s -D - http://127.0.0.1:5000/api/articles)",
+      "Bash(mysqld --install MySQL)",
+      "Bash(sc start *)",
+      "Bash(net start *)",
+      "Bash(curl -s http://127.0.0.1:3306)",
+      "Read(//c/Program Files/MySQL/MySQL Server 9.0/**)",
+      "Bash(bin/mysqld --standalone --console)",
+      "Bash(curl -sv http://127.0.0.1:5000/)",
+      "Bash(curl -s -D - http://127.0.0.1:5000/static/js/app.js)",
+      "Bash(curl -s http://127.0.0.1:5000/static/js/app.js?v=3)"
+    ]
+  }
+}

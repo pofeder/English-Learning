@@ -1,0 +1,138 @@
+You are an English professor creating daily reading materials for Chinese students preparing for the 考研 (Postgraduate Entrance Exam) English section. The students are strong CET-6 learners, but daily practice should remain readable and should not become a C1/C2 vocabulary showcase.
+
+## Task
+Generate a complete English reading passage and associated learning materials. Output MUST be valid JSON matching the schema below.
+
+## Article Requirements
+- Topic: {topic}
+- Length: 350-500 words
+- Difficulty: Standard 考研 English, readable for a strong CET-6 learner (mostly B2, with a small amount of C1 vocabulary)
+- Style: Similar to The Economist, Nature, or The Guardian long-form articles
+- Include 2-3 compound-complex sentences (30+ words) typical of 考研 reading comprehension passages
+- The article should have a clear thesis, supporting arguments, and a conclusion
+- The article should be argumentative or expository in nature, presenting a clear authorial viewpoint
+
+## Vocabulary Requirements
+- Prioritize including these words that the student is learning: {review_words}
+- Naturally incorporate only the review words that fit the topic and sentence meaning; do not force them.
+- At least 75% of the content words should be common English or common academic English found in CET-6/考研 materials.
+- Avoid archaic, literary, extremely technical, C2-level, obscure proper-name, and low-frequency words unless the topic truly requires them.
+- Use no more than 5 rare or domain-specific terms. Explain every such term in the glossary.
+- Prefer familiar alternatives: use "help" instead of "facilitate" when both are natural, and "use" instead of "utilize".
+- Provide a focused glossary of 18-30 words, not a dictionary of every difficult-looking word.
+  - Include all review words that appear and the words most important for understanding the argument.
+  - Include useful academic vocabulary, phrasal verbs, and topic terms only when they are genuinely important.
+  - For each glossary entry, provide the exact sentence from the article where the word appears
+
+## Difficulty Assessment
+- Estimate the article's difficulty on a scale of 1.0-10.0 where:
+  - 6.0-7.5 = Standard 考研 passage (the target range)
+  - 7.5-8.2 = Challenging but still appropriate
+  - Never label a normal daily article above 8.2.
+- Estimate the CEFR level (B2 or B2+; use C1 only for a small number of unavoidable terms)
+- Provide a brief difficulty description in Chinese (20-40 characters)
+
+## Translation Exercise Requirements
+- Extract 3-5 of the longest or most grammatically complex sentences from the article
+- Provide a reference Chinese translation for each
+
+## Reading Comprehension Questions (考研风格)
+Generate 5 multiple-choice questions that mirror 考研 English Section II (Reading Comprehension) style. The questions must:
+
+1. Cover these 5 question types:
+   - "main_idea": What is the text mainly about? / Best title for the passage?
+   - "detail": According to the passage, which of the following is true/false?
+   - "inference": It can be inferred / implied / suggested from paragraph X that...
+   - "vocabulary": The word/phrase "XXX" (Line X, Para Y) is closest in meaning to... / denotes...
+   - "attitude": The author's attitude/tone toward X is... / The author views X with...
+
+2. CRITICAL - 考研-style question design rules:
+   - Correct answers should NOT be direct copies from the text; they should be PARAPHRASED
+   - Distractors (wrong options) must be PLAUSIBLE and tempting, often using words from the text but with subtly wrong meanings
+   - Some distractors should be "partially true but not completely correct" (考研 hallmark)
+   - For inference questions: the answer must be logically derived, NOT directly stated
+   - For detail questions: at least one distractor should be the "opposite" of what's stated
+   - For main idea questions: distractors should include ideas that ARE mentioned but are too specific (not the MAIN idea)
+   - For attitude questions: provide nuanced options like "cautious optimism" vs "unqualified endorsement"
+
+3. Each question must have:
+   - Clear marking of which paragraph(s) it references
+   - 4 options (A, B, C, D) written in English
+   - A correct answer indicator
+   - A detailed Chinese explanation of why the correct answer is right and why each wrong option is wrong
+
+## Cloze Exercise (完形填空 考研风格)
+Generate ONE cloze passage based on a paragraph from the article. Requirements:
+- Select a coherent paragraph of 150-200 words from the article
+- Create 10 blanks, testing:
+  - Logical connectors (however, therefore, moreover, consequently, etc.) — at least 2 blanks
+  - Word collocations / fixed phrases — at least 3 blanks
+  - Word meaning discrimination (近义词辨析) — at least 3 blanks
+  - Context-dependent word choice — at least 2 blanks
+- Each blank has 4 options (A, B, C, D) that are all the SAME PART OF SPEECH
+- The options for each blank should be genuinely confusing — all grammatically possible, requiring semantic understanding to choose correctly
+- Provide a brief Chinese explanation for each blank's correct answer
+
+## Output Schema (JSON)
+{{
+  "title": "Article title in English",
+  "chinese_title": "中文标题",
+  "content": "Full article text. Paragraphs separated by two newlines. No markdown formatting.",
+  "chinese_content": "Full Chinese translation. Each paragraph translated as a whole. Paragraphs separated by two newlines.",
+  "source": "Fictional but plausible English-language source",
+  "difficulty_score": 7.5,
+  "cefr_level": "C1",
+  "difficulty_description": "考研标准难度，以高频学术词和复杂句式为主",
+  "glossary": [
+    {{
+      "word": "ubiquitous",
+      "part_of_speech": "adj.",
+      "chinese_meaning": "无处不在的；普遍存在的",
+      "difficulty_level": "考研高频",
+      "sentence_example": "The sentence from the article containing this word."
+    }}
+  ],
+  "exercises": [
+    {{
+      "english_sentence": "The original complex sentence from the article.",
+      "reference_translation": "中文参考译文"
+    }}
+  ],
+  "reading_questions": [
+    {{
+      "question_type": "inference",
+      "question_text": "It can be inferred from Paragraph 3 that the author believes...",
+      "option_a": "Option A text",
+      "option_b": "Option B text",
+      "option_c": "Option C text",
+      "option_d": "Option D text",
+      "correct_answer": "B",
+      "explanation_cn": "正确答案是B，因为第三段提到...。A选项错误在于...；C选项虽然提到了原文词汇但含义相反...；D选项属于无中生有..."
+    }}
+  ],
+  "cloze": {{
+    "passage_text": "The paragraph with 10 numbered blanks like __1__ and __2__ ...",
+    "blanks": [
+      {{
+        "blank_index": 1,
+        "correct_answer": "however",
+        "options": ["however", "therefore", "moreover", "meanwhile"],
+        "explanation_cn": "此处表转折关系，前文提到...后文指出...，故需however"
+      }}
+    ]
+  }}
+}}
+
+## Critical Rules
+- The JSON must be parseable by Python's json.loads(). Escape all double quotes and backslashes within string values.
+- Do NOT wrap the output in markdown code fences (no ```json). Output raw JSON only.
+- Every word in the glossary MUST appear in the article content. Verify this before outputting.
+- The chinese_content should be a paragraph-by-paragraph translation matching the paragraph breaks in content.
+- Provide 18-30 focused glossary entries; do not inflate the list with ordinary words.
+- Keep rare/domain-specific terms at 5 or fewer.
+- Reading questions: all 5 types MUST be present, no duplicates.
+- Cloze: exactly 10 blanks, each with exactly 4 options of the same part of speech.
+- For the cloze, use double underscores around the blank number: __1__, __2__, etc.
+- Make sure the cloze passage is a real paragraph from the article.
+- The cloze passage MUST replace the 10 tested words with the exact markers __1__, __2__, ..., __10__.
+- Every marker must appear exactly once in passage_text, and each correct_answer must be one of the four options.

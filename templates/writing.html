@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>写作练习 · 考研英语</title>
+<link rel="stylesheet" href="/static/css/style.css?v=8">
+</head>
+<body>
+<div class="reading-progress" id="reading-progress"></div>
+
+<header class="header">
+<div class="header-inner">
+    <div class="header-brand">
+        <a href="/" style="text-decoration:none;color:inherit;display:flex;align-items:center;gap:10px;">
+            <div class="brand-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+            </div>
+            <div>
+                <h1 class="app-title">写作练习</h1>
+                <span class="app-subtitle">Writing Practice · 考研英语</span>
+            </div>
+        </a>
+    </div>
+    <nav class="header-nav">
+        <a href="/flashcard" class="nav-link">闪卡</a>
+        <a href="/mistakes" class="nav-link">错题本</a>
+        <button id="theme-toggle" class="theme-toggle">☀</button>
+    </nav>
+</div>
+</header>
+
+<div class="writing-container">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;gap:12px;">
+        <h2 style="font-size:1.2rem;font-weight:700;color:var(--ink);">✍️ 写作练习</h2>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="vocab-tab active" id="tab-new" onclick="switchTab('new')">新建练习</button>
+            <button class="vocab-tab" id="tab-history" onclick="switchTab('history')">历史记录</button>
+        </div>
+    </div>
+
+    <!-- New exercise form -->
+    <div id="panel-new">
+        <div class="writing-card">
+            <p style="margin-bottom:14px;color:var(--ink-light);font-size:0.9rem;">选择作文类型并生成写作题目</p>
+            <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:18px;">
+                <button class="vocab-tab active" id="type-small" onclick="selectType('essay_small')">小作文（应用文）</button>
+                <button class="vocab-tab" id="type-large" onclick="selectType('essay_large')">大作文（图表/图画作文）</button>
+            </div>
+            <button class="submit-btn" id="gen-writing-btn" onclick="generateExercise()">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                生成写作题目
+            </button>
+            <span id="gen-status" style="font-size:0.82rem;color:var(--ink-muted);margin-left:12px;"></span>
+        </div>
+
+        <!-- Exercise display & submit -->
+        <div id="exercise-area" style="display:none;">
+            <div class="writing-card">
+                <div class="writing-type-badge" id="wt-badge"></div>
+                <div class="writing-prompt-cn" id="wt-prompt"></div>
+                <div class="writing-requirements" id="wt-requirements"></div>
+
+                <textarea class="writing-input" id="essay-input" placeholder="在这里写下你的作文..."></textarea>
+                <div class="writing-word-count" id="word-count">0 words</div>
+
+                <div class="writing-actions">
+                    <button class="submit-btn" id="submit-essay-btn" onclick="submitEssay()">提交批改</button>
+                    <button class="btn-ghost" id="show-ref-btn">查看范文</button>
+                </div>
+
+                <div id="ref-essay" style="display:none;margin-top:16px;padding:16px;background:var(--surface-alt);border-radius:var(--radius);border:1px solid var(--border);font-size:0.9rem;line-height:1.8;color:var(--ink-light);white-space:pre-wrap;"></div>
+                <div id="feedback-area"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- History panel -->
+    <div id="panel-history" style="display:none;">
+        <div id="history-list"></div>
+    </div>
+</div>
+
+<script>
+(() => {
+    "use strict";
+    const $ = (id) => document.getElementById(id);
+    let currentType = "essay_large";
+    let currentExerciseId = null;
+    let currentRefEssay = "";
+
+    document.addEventListener("DOMContentLoaded", setupDarkMode);
+
+    function setupDarkMode() {
+        if (localStorage.getItem("darkMode") === "1") document.body.classList.add("dark");
+        const btn = $("theme-toggle");
+        if (btn) {
+            btn.textContent = document.body.classList.contains("dark") ? "☀" : "🌙";
+            btn.addEventListener("click", () => {
+                document.body.classList.toggle("dark");
+                localStorage.setItem("darkMode", document.body.classList.contains("dark") ? "1" : "0");
+                btn.textContent = document.body.classList.contains("dark") ? "☀" : "🌙";
+            });
+        }
+    }
+
+    window.selectType = function(type) {
+        currentType = type;
+        [$("type-small"), $("type-large")].forEach(el => { if (el) el.classList.remove("active"); });
+        if (type === "essay_small" && $("type-small")) $("type-small").classList.add("active");
+        if (type === "essay_large" && $("type-large")) $("type-large").classList.add("active");
+    };
+
+    window.switchTab = async function(tab) {
+        [$("tab-new"), $("tab-history")].forEach(el => { if (el) el.classList.remove("active"); });
+        if (tab === "new") { $("tab-new").classList.add("active"); $("panel-new").style.display = "block"; $("panel-history").style.display = "none"; }
+        else { $("tab-history").classList.add("active"); $("panel-new").style.display = "none"; $("panel-history").style.display = "block"; await loadHistory(); }
+    };
+
+    window.generateExercise = async function() {
+        const btn = $("gen-writing-btn");
+        const status = $("gen-status");
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-sm"></span> 生成中...';
+        if (status) status.textContent = "AI 正在出题...";
+        try {
+            const resp = await fetch("/api/writing/generate", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ type: currentType }),
+            });
+            if (!resp.ok) throw new Error((await resp.json()).error);
+            const data = await resp.json();
+            currentExerciseId = data.id;
+            currentRefEssay = data.reference_essay || "";
+            renderExercise(data);
+            if (status) status.textContent = "题目已生成";
+        } catch (e) {
+            if (status) status.textContent = "失败: " + e.message;
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> 重新生成';
+        }
+    };
+
+    function renderExercise(data) {
+        const area = $("exercise-area");
+        if (!area) return;
+        area.style.display = "block";
+
+        const badge = $("wt-badge");
+        if (badge) {
+            badge.textContent = data.writing_type || currentType === "essay_small" ? "小作文 · 应用文" : "大作文 · 图表/图画";
+            badge.className = "writing-type-badge wt-" + (currentType === "essay_small" ? "essay_small" : "essay_large");
+        }
+        setText("wt-prompt", data.prompt_cn || "");
+        setHtml("wt-requirements", (data.requirements || "").replace(/\n/g, "<br>"));
+
+        const input = $("essay-input");
+        const refBtn = $("show-ref-btn");
+        const refDiv = $("ref-essay");
+        const fb = $("feedback-area");
+        if (fb) fb.innerHTML = "";
+        if (refDiv) refDiv.style.display = "none";
+        if (input) { input.value = ""; input.disabled = false; }
+        if (refBtn) {
+            const newRef = refBtn.cloneNode(true);
+            refBtn.parentNode.replaceChild(newRef, refBtn);
+            newRef.addEventListener("click", () => {
+                if (refDiv) {
+                    refDiv.style.display = refDiv.style.display === "none" ? "block" : "none";
+                    refDiv.textContent = currentRefEssay;
+                }
+            });
+        }
+
+        const submitBtn = $("submit-essay-btn");
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "提交批改"; }
+
+        // Reset submit
+        const newSubmit = submitBtn.cloneNode(true);
+        submitBtn.parentNode.replaceChild(newSubmit, submitBtn);
+        newSubmit.addEventListener("click", submitEssay);
+    }
+
+    // Word count
+    const essayInput = $("essay-input");
+    if (essayInput) {
+        essayInput.addEventListener("input", () => {
+            const wc = $("word-count");
+            if (!wc) return;
+            const words = essayInput.value.trim().split(/\s+/).filter(w => w.length > 0);
+            wc.textContent = words.length + " words";
+        });
+    }
+
+    window.submitEssay = async function() {
+        const input = $("essay-input");
+        const essay = (input ? input.value : "").trim();
+        if (!essay) { alert("请先写下你的作文"); return; }
+        if (!currentExerciseId) { alert("请先生成写作题目"); return; }
+
+        const btn = $("submit-essay-btn");
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-sm"></span> AI 批改中...';
+
+        try {
+            const resp = await fetch("/api/writing/submit", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ exercise_id: currentExerciseId, essay }),
+            });
+            if (!resp.ok) throw new Error((await resp.json()).error);
+            const data = await resp.json();
+            renderFeedback(data);
+        } catch (e) {
+            alert("批改失败: " + e.message);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = "提交批改";
+        }
+    };
+
+    function renderFeedback(data) {
+        const fb = $("feedback-area");
+        if (!fb) return;
+        fb.innerHTML = `
+            <div class="writing-feedback">
+                <h4 style="margin-bottom:14px;font-size:1rem;color:var(--ink);">📝 批改结果</h4>
+                <div class="writing-scores">
+                    <div class="ws-item"><div class="ws-value">${data.score || "-"}</div><div class="ws-label">综合评分</div></div>
+                    <div class="ws-item"><div class="ws-value">${data.content_score || "-"}</div><div class="ws-label">内容完整性</div></div>
+                    <div class="ws-item"><div class="ws-value">${data.structure_score || "-"}</div><div class="ws-label">结构逻辑</div></div>
+                    <div class="ws-item"><div class="ws-value">${data.language_score || "-"}</div><div class="ws-label">语言表达</div></div>
+                    <div class="ws-item"><div class="ws-value">${data.grammar_score || "-"}</div><div class="ws-label">语法准确</div></div>
+                </div>
+                <div class="feedback-section">
+                    <div class="feedback-section-label">总体评价</div>
+                    <div class="feedback-ai-text">${escHtml(data.feedback || "")}</div>
+                </div>
+                ${data.corrections && data.corrections.length ? `
+                <div class="feedback-section">
+                    <div class="feedback-section-label">修改建议</div>
+                    <ul class="correction-list">${data.corrections.map(c => "<li>" + escHtml(c) + "</li>").join("")}</ul>
+                </div>` : ""}
+            </div>`;
+    }
+
+    async function loadHistory() {
+        const list = $("history-list");
+        if (!list) return;
+        list.innerHTML = '<div class="loading-area"><div class="skeleton skeleton-line"></div></div>';
+        try {
+            const resp = await fetch("/api/writing/history");
+            const rows = await resp.json();
+            if (rows.length === 0) {
+                list.innerHTML = '<p style="color:var(--ink-muted);text-align:center;padding:32px;">暂无写作记录</p>';
+                return;
+            }
+            const typeNames = { essay_small: "小作文", essay_large: "大作文" };
+            list.innerHTML = rows.map(r => `
+                <div class="writing-card" style="padding:16px 20px;margin-bottom:12px;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+                        <span class="writing-type-badge wt-${r.writing_type}">${typeNames[r.writing_type] || r.writing_type}</span>
+                        <span style="font-size:0.78rem;color:var(--ink-muted);">${r.created_at ? new Date(r.created_at).toLocaleDateString("zh-CN") : ""}</span>
+                    </div>
+                    <p style="font-size:0.88rem;color:var(--ink-light);margin-top:8px;line-height:1.6;">${escHtml(r.prompt_cn || "").substring(0, 150)}...</p>
+                    ${r.score ? '<span class="score-badge score-' + (r.score >= 8 ? 'high' : r.score >= 6 ? 'mid' : 'low') + '" style="display:inline-flex;width:32px;height:32px;font-size:0.85rem;margin-top:8px;">' + r.score + '</span>' : '<span style="font-size:0.78rem;color:var(--ink-muted);">未批改</span>'}
+                </div>`).join("");
+        } catch (e) {
+            list.innerHTML = '<p style="color:var(--red);">加载失败</p>';
+        }
+    }
+
+    function setText(id, text) { const el = $(id); if (el) el.textContent = text || ""; }
+    function setHtml(id, html) { const el = $(id); if (el) el.innerHTML = html || ""; }
+    function escHtml(s) {
+        if (!s) return "";
+        const d = document.createElement("div");
+        d.textContent = s;
+        return d.innerHTML;
+    }
+})();
+</script>
+</body>
+</html>

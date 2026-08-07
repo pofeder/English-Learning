@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>闪卡复习 · 考研英语</title>
+<link rel="stylesheet" href="/static/css/style.css?v=8">
+</head>
+<body>
+<div class="reading-progress" id="reading-progress"></div>
+
+<header class="header">
+<div class="header-inner">
+    <div class="header-brand">
+        <a href="/" style="text-decoration:none;color:inherit;display:flex;align-items:center;gap:10px;">
+            <div class="brand-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+            </div>
+            <div>
+                <h1 class="app-title">闪卡复习</h1>
+                <span class="app-subtitle">Spaced Repetition · 间隔记忆</span>
+            </div>
+        </a>
+    </div>
+    <nav class="header-nav">
+        <a href="/vocabulary" class="nav-link">单词本</a>
+        <a href="/mistakes" class="nav-link">错题本</a>
+        <button id="theme-toggle" class="theme-toggle">☀</button>
+    </nav>
+</div>
+</header>
+
+<div class="flashcard-container">
+    <div class="flashcard-progress" id="fc-progress" style="display:none;"></div>
+
+    <div id="fc-loading" class="loading-area">
+        <div class="skeleton skeleton-line"></div>
+        <div class="skeleton skeleton-line w-60"></div>
+    </div>
+
+    <div id="fc-card-area" style="display:none;">
+        <div class="flashcard" id="flashcard">
+            <div class="flashcard-inner" id="fc-inner">
+                <div class="flashcard-front">
+                    <div class="fc-word" id="fc-word"></div>
+                    <div class="fc-pos" id="fc-pos"></div>
+                    <div class="fc-hint">点击翻转查看释义</div>
+                </div>
+                <div class="flashcard-back">
+                    <div class="fc-meaning" id="fc-meaning"></div>
+                    <div class="fc-example" id="fc-example"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="fc-actions" id="fc-actions" style="display:none;">
+            <button class="fc-btn fc-btn-again" data-quality="1">😰 完全忘了</button>
+            <button class="fc-btn fc-btn-hard" data-quality="2">🤔 有点难</button>
+            <button class="fc-btn fc-btn-good" data-quality="3">😊 记住了</button>
+            <button class="fc-btn fc-btn-easy" data-quality="4">😎 很简单</button>
+        </div>
+    </div>
+
+    <div id="fc-empty" class="fc-empty" style="display:none;">
+        <div class="fc-empty-icon">🎉</div>
+        <p>今天没有需要复习的单词</p>
+        <p style="font-size:0.85rem;margin-top:8px;">去读一篇文章，把生词加入单词本，它们会自动进入复习计划</p>
+        <a href="/" class="btn-primary" style="margin-top:16px;text-decoration:none;">去阅读</a>
+    </div>
+</div>
+
+<script>
+(() => {
+    "use strict";
+    const $ = (id) => document.getElementById(id);
+    let currentWords = [];
+    let currentIndex = -1;
+    let totalDue = 0;
+    let totalTracked = 0;
+
+    document.addEventListener("DOMContentLoaded", async () => {
+        setupDarkMode();
+        await loadDueWords();
+    });
+
+    function setupDarkMode() {
+        if (localStorage.getItem("darkMode") === "1") document.body.classList.add("dark");
+        const btn = $("theme-toggle");
+        if (btn) {
+            btn.textContent = document.body.classList.contains("dark") ? "☀" : "🌙";
+            btn.addEventListener("click", () => {
+                document.body.classList.toggle("dark");
+                localStorage.setItem("darkMode", document.body.classList.contains("dark") ? "1" : "0");
+                btn.textContent = document.body.classList.contains("dark") ? "☀" : "🌙";
+            });
+        }
+    }
+
+    async function loadDueWords() {
+        try {
+            const resp = await fetch("/api/flashcard/due?limit=30");
+            const data = await resp.json();
+            currentWords = data.words;
+            totalDue = data.due_count;
+            totalTracked = data.total_tracked;
+
+            const loading = $("fc-loading");
+            const cardArea = $("fc-card-area");
+            const empty = $("fc-empty");
+            if (loading) loading.style.display = "none";
+
+            if (currentWords.length === 0) {
+                if (cardArea) cardArea.style.display = "none";
+                if (empty) empty.style.display = "block";
+                return;
+            }
+            if (cardArea) cardArea.style.display = "block";
+            currentIndex = 0;
+            showCard();
+        } catch (e) {
+            const loading = $("fc-loading");
+            if (loading) loading.innerHTML = '<p style="color:var(--red);text-align:center;">加载失败，请检查网络连接</p>';
+        }
+    }
+
+    function showCard() {
+        if (currentIndex >= currentWords.length) {
+            // All done
+            const cardArea = $("fc-card-area");
+            const empty = $("fc-empty");
+            if (cardArea) cardArea.style.display = "none";
+            if (empty) {
+                empty.style.display = "block";
+                empty.innerHTML = '<div class="fc-empty-icon">🎉</div><p>本轮复习完成！</p><p style="font-size:0.85rem;margin-top:8px;">共复习 ' + currentWords.length + ' 个单词，下次复习时间已自动安排</p><p style="font-size:0.8rem;color:var(--ink-muted);margin-top:4px;">共追踪 ' + totalTracked + ' 个单词</p><a href="/" class="btn-primary" style="margin-top:16px;text-decoration:none;">返回阅读</a>';
+            }
+            return;
+        }
+
+        const w = currentWords[currentIndex];
+        const el = $("fc-inner");
+        if (el) el.classList.remove("flipped");
+
+        const actions = $("fc-actions");
+        if (actions) actions.style.display = "none";
+
+        setText("fc-word", w.word);
+        setText("fc-pos", w.part_of_speech || "");
+        setText("fc-meaning", w.chinese_meaning || "");
+        setText("fc-example", w.sentence_example || "");
+
+        const progress = $("fc-progress");
+        if (progress) {
+            progress.style.display = "block";
+            progress.textContent = "第 " + (currentIndex + 1) + " / " + currentWords.length + " 个 · 今日待复习 " + totalDue + " 个 · 共追踪 " + totalTracked + " 个";
+        }
+    }
+
+    const fcInner = $("fc-inner");
+    if (fcInner) {
+        fcInner.addEventListener("click", () => {
+            if (fcInner.classList.contains("flipped")) return;
+            fcInner.classList.add("flipped");
+            const actions = $("fc-actions");
+            if (actions) actions.style.display = "flex";
+        });
+    }
+
+    const actionBtns = document.querySelectorAll(".fc-btn[data-quality]");
+    actionBtns.forEach(btn => {
+        btn.addEventListener("click", async (e) => {
+            const quality = parseInt(e.target.dataset.quality);
+            const w = currentWords[currentIndex];
+            btn.disabled = true;
+            try {
+                await fetch("/api/flashcard/review", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ word: w.word, quality }),
+                });
+                currentIndex++;
+                showCard();
+            } catch (err) {
+                btn.disabled = false;
+            }
+        });
+    });
+
+    // Keyboard shortcuts
+    document.addEventListener("keydown", (e) => {
+        if (["1","2","3","4"].includes(e.key)) {
+            const fcInner = $("fc-inner");
+            if (!fcInner || !fcInner.classList.contains("flipped")) return;
+            const idx = parseInt(e.key) - 1;
+            const btns = document.querySelectorAll(".fc-btn[data-quality]");
+            if (btns[idx]) btns[idx].click();
+        }
+        if (e.key === " " || e.key === "Enter") {
+            const fcInner = $("fc-inner");
+            if (fcInner && !fcInner.classList.contains("flipped")) {
+                e.preventDefault();
+                fcInner.click();
+            }
+        }
+    });
+
+    function setText(id, text) {
+        const el = $(id);
+        if (el) el.textContent = text || "";
+    }
+})();
+</script>
+</body>
+</html>
