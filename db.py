@@ -609,7 +609,7 @@ def delete_word_record(db, word):
 def upsert_word_definition(db, word, part_of_speech, chinese_meaning, sentence_example, difficulty_level):
     """Store one reusable local definition for click-to-lookup."""
     word = word.lower().strip()
-    now_str = "NOW()" if DB_TYPE == "mysql" else datetime.now().isoformat()
+    now_str = datetime.now() if DB_TYPE == "mysql" else datetime.now().isoformat()
     if DB_TYPE == "mysql":
         _db_execute(
             db,

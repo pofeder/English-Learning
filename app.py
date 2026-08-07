@@ -271,7 +271,7 @@ def api_translate_submit():
         "UPDATE translation_exercises SET user_translation = %s, feedback = %s, "
         "score = %s, submitted_at = %s WHERE id = %s",
         (data["user_translation"], result["feedback"], result["score"],
-         "NOW()" if DB_TYPE == "mysql" else datetime.now().isoformat(),
+         datetime.now() if DB_TYPE == "mysql" else datetime.now().isoformat(),
          data["exercise_id"]),
     )
     db.commit()
@@ -324,7 +324,7 @@ def api_reading_submit():
         if is_correct:
             correct_count += 1
 
-        now_str = "NOW()" if DB_TYPE == "mysql" else datetime.now().isoformat()
+        now_str = datetime.now() if DB_TYPE == "mysql" else datetime.now().isoformat()
         _db_execute(
             db,
             "INSERT INTO reading_answer_records (question_id, user_answer, is_correct, answered_at) "
@@ -334,7 +334,7 @@ def api_reading_submit():
 
         # Record mistakes
         if not is_correct and user_ans:
-            now_str2 = "NOW()" if DB_TYPE == "mysql" else datetime.now().isoformat()
+            now_str2 = datetime.now() if DB_TYPE == "mysql" else datetime.now().isoformat()
             _db_execute(
                 db,
                 "INSERT INTO mistake_notebook (mistake_type, ref_id, question_text, "
@@ -404,7 +404,7 @@ def api_cloze_submit():
 
         # Record mistakes
         if not is_correct:
-            now_str = "NOW()" if DB_TYPE == "mysql" else datetime.now().isoformat()
+            now_str = datetime.now() if DB_TYPE == "mysql" else datetime.now().isoformat()
             _db_execute(
                 db,
                 "INSERT INTO mistake_notebook (mistake_type, ref_id, question_text, "
@@ -414,7 +414,7 @@ def api_cloze_submit():
                  user_ans, b["correct_answer"], b.get("explanation_cn", "")[:500], now_str),
             )
 
-    now_str = "NOW()" if DB_TYPE == "mysql" else datetime.now().isoformat()
+    now_str = datetime.now() if DB_TYPE == "mysql" else datetime.now().isoformat()
     _db_execute(
         db,
         "INSERT INTO cloze_answer_records (cloze_id, user_answers_json, score, submitted_at) "
@@ -473,7 +473,7 @@ Output raw JSON only, no markdown fences."""
         )
         result = _parse_json_response(resp.choices[0].message.content)
 
-        now_str = "NOW()" if DB_TYPE == "mysql" else datetime.now().isoformat()
+        now_str = datetime.now() if DB_TYPE == "mysql" else datetime.now().isoformat()
         db = get_db()
         ex_id = _db_execute(
             db,
@@ -542,7 +542,7 @@ Output raw JSON only, no markdown fences."""
         )
         result = _parse_json_response(resp.choices[0].message.content)
 
-        now_str = "NOW()" if DB_TYPE == "mysql" else datetime.now().isoformat()
+        now_str = datetime.now() if DB_TYPE == "mysql" else datetime.now().isoformat()
         _db_execute(
             db,
             "INSERT INTO writing_submissions (exercise_id, user_essay, score, feedback, submitted_at) "
@@ -580,7 +580,7 @@ def api_flashcard_due():
     db = get_db()
     limit = int(request.args.get("limit", 20))
 
-    now_str = "NOW()" if DB_TYPE == "mysql" else datetime.now().isoformat()
+    now_str = datetime.now() if DB_TYPE == "mysql" else datetime.now().isoformat()
 
     # First, seed spaced_repetition from word_lookups for new words
     _db_execute(
@@ -658,7 +658,7 @@ def api_flashcard_review():
 
     ef = max(1.3, ef + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02)))
 
-    now_str = "NOW()" if DB_TYPE == "mysql" else datetime.now().isoformat()
+    now_str = datetime.now() if DB_TYPE == "mysql" else datetime.now().isoformat()
     if DB_TYPE == "mysql":
         _db_execute(
             db,
@@ -729,7 +729,7 @@ def api_checkin():
     """Record daily check-in."""
     today = datetime.now().strftime("%Y-%m-%d")
     db = get_db()
-    now_str = "NOW()" if DB_TYPE == "mysql" else datetime.now().isoformat()
+    now_str = datetime.now() if DB_TYPE == "mysql" else datetime.now().isoformat()
 
     try:
         data = request.get_json() or {}
