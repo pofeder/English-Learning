@@ -22,6 +22,7 @@ import argparse
 import csv
 import json
 import os
+import re
 import sys
 import urllib.request
 from datetime import datetime
@@ -58,7 +59,52 @@ def _first(item, *keys):
     return ""
 
 
-def read_dictionary(path):
+EXAM_TAGS = {"ky"}
+COMMON_TAGS = {"cet4", "cet6", "gk", "zk"}
+COMMON_FREQUENCY_MAX = 10000
+
+
+def _row_tags(row):
+    raw = _first(row, "tag", "tags").lower()
+    return set(part for part in re.split(r"[\s,;|]+", raw) if part)
+
+
+def _row_frequency(row):
+    raw = _first(row, "frq", "frequency", "freq")
+    try:
+        return int(float(raw))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _matches_profile(row, profile):
+    if profile == "all":
+        return True
+
+    # Small JSON dictionaries often do not carry ECDICT tags or frequency
+    # metadata. Keep those entries instead of filtering the whole file out.
+    has_metadata = any(
+        str(row.get(key, "")).strip()
+        for key in ("tag", "tags", "frq", "frequency", "freq")
+    )
+    if not has_metadata:
+        return True
+
+    tags = _row_tags(row)
+    is_exam = bool(tags & EXAM_TAGS)
+    is_common = bool(tags & COMMON_TAGS) or (
+        0 < _row_frequency(row) <= COMMON_FREQUENCY_MAX
+    )
+
+    if profile == "exam":
+        return is_exam
+    if profile == "common":
+        return is_common
+    # Default: postgraduate-exam words plus common high-frequency words.
+    return is_exam or is_common
+
+
+def read_dictionary(path, profile="exam-common"):
     if path.lower().endswith(".json"):
         with open(path, encoding="utf-8") as source:
             payload = json.load(source)
@@ -69,9 +115,16 @@ def read_dictionary(path):
 
     entries = []
     for row in rows:
+        if not _matches_profile(row, profile):
+            continue
         word = _first(row, "word", "headword", "lemma").lower()
         meaning = _first(row, "chinese_meaning", "translation", "meaning", "definition", "trans")
-        if not word or not meaning or len(word) > 100:
+        if (
+            not word
+            or not meaning
+            or len(word) > 100
+            or not re.fullmatch(r"[a-z][a-z'-]{0,48}", word)
+        ):
             continue
         entries.append({
             "word": word,
@@ -83,23 +136,69 @@ def read_dictionary(path):
     return entries
 
 
-def import_dictionary(path):
-    from app import app
-    from db import get_connection, upsert_word_definition
+def _bulk_upsert_word_definitions(db, entries):
+    """Write one batch with executemany instead of one network request per word."""
+    from db import DB_TYPE
 
-    entries = read_dictionary(path)
+    now = datetime.now() if DB_TYPE == "mysql" else datetime.now().isoformat()
+    rows = [
+        (
+            entry["word"],
+            entry.get("part_of_speech", ""),
+            entry["chinese_meaning"],
+            entry.get("sentence_example", ""),
+            entry.get("difficulty_level", ""),
+            now,
+        )
+        for entry in entries
+    ]
+
+    if DB_TYPE == "mysql":
+        sql = (
+            "INSERT INTO word_definitions "
+            "(word, part_of_speech, chinese_meaning, sentence_example, difficulty_level, updated_at) "
+            "VALUES (%s, %s, %s, %s, %s, %s) "
+            "ON DUPLICATE KEY UPDATE part_of_speech = VALUES(part_of_speech), "
+            "chinese_meaning = VALUES(chinese_meaning), sentence_example = VALUES(sentence_example), "
+            "difficulty_level = VALUES(difficulty_level), updated_at = VALUES(updated_at)"
+        )
+        with db.cursor() as cur:
+            cur.executemany(sql, rows)
+    else:
+        db.executemany(
+            "INSERT INTO word_definitions "
+            "(word, part_of_speech, chinese_meaning, sentence_example, difficulty_level, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?) "
+            "ON CONFLICT(word) DO UPDATE SET part_of_speech = excluded.part_of_speech, "
+            "chinese_meaning = excluded.chinese_meaning, sentence_example = excluded.sentence_example, "
+            "difficulty_level = excluded.difficulty_level, updated_at = excluded.updated_at",
+            rows,
+        )
+
+
+def import_dictionary(path, profile="exam-common"):
+    from app import app
+    from db import get_connection
+
+    entries = read_dictionary(path, profile=profile)
     if not entries:
         raise ValueError("no usable dictionary entries found")
 
     with app.app_context():
         db = get_connection()
         try:
-            for entry in entries:
-                upsert_word_definition(db, **entry)
-            db.commit()
+            batch_size = 500
+            total = len(entries)
+            print(f"Dictionary parsed: {total:,} entries; importing in batches...", flush=True)
+            for start in range(0, total, batch_size):
+                batch = entries[start:start + batch_size]
+                _bulk_upsert_word_definitions(db, batch)
+                db.commit()
+                imported = min(start + batch_size, total)
+                print(f"Imported {imported:,}/{total:,} entries...", flush=True)
         finally:
             db.close()
-    print(f"Imported {len(entries):,} dictionary entries")
+    print(f"Imported {len(entries):,} dictionary entries (profile: {profile})")
 
 
 def validate_question_bank(path):
@@ -131,6 +230,12 @@ def main():
 
     import_cmd = sub.add_parser("import-dictionary", help="import JSON/CSV dictionary into SQLite/MySQL")
     import_cmd.add_argument("--path", required=True)
+    import_cmd.add_argument(
+        "--profile",
+        choices=("exam-common", "exam", "common", "all"),
+        default="exam-common",
+        help="exam-common=考研+高频常见词（默认），exam=仅考研，common=仅常见词，all=全部",
+    )
 
     question = sub.add_parser("download-question-bank", help="download and validate an authorized question bank")
     question.add_argument("--url", required=True)
@@ -140,7 +245,7 @@ def main():
     if args.command == "download":
         download_file(args.url, args.output)
     elif args.command == "import-dictionary":
-        import_dictionary(args.path)
+        import_dictionary(args.path, profile=args.profile)
     elif args.command == "download-question-bank":
         output = download_file(args.url, args.output)
         validate_question_bank(output)

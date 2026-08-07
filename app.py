@@ -31,7 +31,7 @@ from db import (
 )
 from article_store import (
     get_today_article, get_article_by_id, list_articles,
-    get_glossary_entry, get_stats, get_vocabulary,
+    get_glossary_entry, get_stats, get_vocabulary, clear_article_cache,
 )
 from word_cache import get as get_cached_word, set_value as cache_word
 from generator import generate_article
@@ -275,6 +275,7 @@ def api_translate_submit():
          data["exercise_id"]),
     )
     db.commit()
+    clear_article_cache(exercise["article_id"])
     logger.info(f"Translation submitted for exercise {data['exercise_id']}, score: {result['score']}")
 
     return jsonify({
@@ -356,6 +357,7 @@ def api_reading_submit():
         })
 
     db.commit()
+    clear_article_cache(data["article_id"])
 
     score = round(correct_count / len(questions) * 100)
     return jsonify({
@@ -423,6 +425,7 @@ def api_cloze_submit():
          correct_count, now_str),
     )
     db.commit()
+    clear_article_cache(cloze["article_id"])
 
     return jsonify({
         "correct_count": correct_count,

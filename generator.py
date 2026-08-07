@@ -8,6 +8,7 @@ from openai import OpenAI
 
 from db import get_connection, get_priority_words, upsert_word_definition, _db_execute, DB_TYPE
 from word_cache import prime as prime_word_cache
+from article_store import clear_article_cache
 
 logger = logging.getLogger("english_daily")
 
@@ -327,6 +328,7 @@ def generate_article():
 
     db.commit()
     db.close()
+    clear_article_cache()
     prime_word_cache(generated_definitions)
 
     logger.info(

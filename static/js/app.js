@@ -3,6 +3,7 @@
     "use strict";
     let currentArticleId = null;
     let glossaryMap = new Map();
+    let wordDefinitionMap = new Map();
     let ttsPlaying = false;
 
     const $ = (id) => document.getElementById(id);
@@ -277,7 +278,7 @@
 
     function renderArticle(article) {
         currentArticleId = article.id;
-        buildGlossaryMap(article.glossary);
+        buildGlossaryMap(article.glossary, article.word_definitions);
 
         const section = $("article-section");
         if (!section) return;
@@ -376,7 +377,7 @@
 
     async function showWordDefinition(word, target) {
         if (typeof Tooltip === "undefined") return;
-        const cached = glossaryMap.get(word);
+        const cached = glossaryMap.get(word) || wordDefinitionMap.get(word);
         if (cached) {
             Tooltip.show(cached, target);
             return;
@@ -396,10 +397,18 @@
         }
     }
 
-    function buildGlossaryMap(glossary) {
+    function buildGlossaryMap(glossary, wordDefinitions) {
         glossaryMap.clear();
-        if (!glossary) return;
-        for (const g of glossary) glossaryMap.set(g.word.toLowerCase(), g);
+        wordDefinitionMap.clear();
+        for (const entry of (wordDefinitions || [])) {
+            wordDefinitionMap.set(entry.word.toLowerCase(), entry);
+        }
+        for (const g of (glossary || [])) {
+            const key = g.word.toLowerCase();
+            glossaryMap.set(key, g);
+            // Article-specific meanings take priority over dictionary meanings.
+            wordDefinitionMap.set(key, g);
+        }
     }
 
     function setupGlossary(glossary) {

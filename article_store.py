@@ -1,7 +1,71 @@
 import json
 import re
+from collections import OrderedDict
+from copy import deepcopy
+from threading import RLock
+from time import monotonic
 
 from db import _db_fetch, _db_fetch_one
+from word_cache import prime as prime_word_cache
+
+
+ARTICLE_CACHE_TTL_SECONDS = 300
+ARTICLE_LIST_CACHE_TTL_SECONDS = 120
+_article_cache = OrderedDict()
+_article_cache_lock = RLock()
+
+
+def _get_cached(key):
+    now = monotonic()
+    with _article_cache_lock:
+        item = _article_cache.get(key)
+        if not item:
+            return None
+        expires_at, value = item
+        if expires_at <= now:
+            _article_cache.pop(key, None)
+            return None
+        _article_cache.move_to_end(key)
+        return deepcopy(value)
+
+
+def _set_cached(key, value, ttl):
+    with _article_cache_lock:
+        _article_cache[key] = (monotonic() + ttl, deepcopy(value))
+        _article_cache.move_to_end(key)
+        while len(_article_cache) > 20:
+            _article_cache.popitem(last=False)
+
+
+def clear_article_cache(article_id=None):
+    """Clear cached article responses after article data or answers change."""
+    with _article_cache_lock:
+        if article_id is None:
+            _article_cache.clear()
+            return
+        _article_cache.pop(f"article:{article_id}", None)
+        _article_cache.pop("today", None)
+        _article_cache.pop("list", None)
+
+
+def _load_article_word_definitions(db, content):
+    """Load all known word definitions used by an article in one query."""
+    words = sorted({
+        word.lower()
+        for word in re.findall(r"\b[A-Za-z][A-Za-z'-]{0,48}\b", content or "")
+    })
+    if not words:
+        return []
+
+    # Keep the response bounded if an unusually long article is imported.
+    words = words[:1200]
+    placeholders = ", ".join(["%s"] * len(words))
+    return _db_fetch(
+        db,
+        "SELECT word, part_of_speech, chinese_meaning, sentence_example, difficulty_level "
+        f"FROM word_definitions WHERE word IN ({placeholders})",
+        words,
+    )
 
 
 def _normalize_cloze_passage(passage_text, blanks):
@@ -43,6 +107,9 @@ def _fetch_article(db, sql, params):
         "FROM glossary WHERE article_id = %s",
         (article["id"],),
     )
+    prime_word_cache(article["glossary"])
+    article["word_definitions"] = _load_article_word_definitions(db, article.get("content", ""))
+    prime_word_cache(article["word_definitions"])
     article["exercises"] = _db_fetch(
         db,
         "SELECT id, sentence_index, english_sentence, reference_translation, "
@@ -96,20 +163,38 @@ def _fetch_article(db, sql, params):
 
 
 def get_today_article(db):
-    return _fetch_article(
+    cached = _get_cached("today")
+    if cached is not None:
+        return cached
+    article = _fetch_article(
         db,
         "SELECT * FROM articles WHERE is_active = 1 ORDER BY created_at DESC LIMIT 1",
         (),
     )
+    if article:
+        _set_cached("today", article, ARTICLE_CACHE_TTL_SECONDS)
+    return article
 
 
 def get_article_by_id(db, article_id):
-    return _fetch_article(db, "SELECT * FROM articles WHERE id = %s", (article_id,))
+    key = f"article:{article_id}"
+    cached = _get_cached(key)
+    if cached is not None:
+        return cached
+    article = _fetch_article(db, "SELECT * FROM articles WHERE id = %s", (article_id,))
+    if article:
+        _set_cached(key, article, ARTICLE_CACHE_TTL_SECONDS)
+    return article
 
 
 def list_articles(db):
+    cached = _get_cached("list")
+    if cached is not None:
+        return cached
     rows = _db_fetch(db, "SELECT id, title, created_at FROM articles ORDER BY created_at DESC")
-    return [{"id": r["id"], "title": r["title"], "created_at": str(r["created_at"])} for r in rows]
+    articles = [{"id": r["id"], "title": r["title"], "created_at": str(r["created_at"])} for r in rows]
+    _set_cached("list", articles, ARTICLE_LIST_CACHE_TTL_SECONDS)
+    return articles
 
 
 def get_glossary_entry(db, word):

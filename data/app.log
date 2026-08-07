@@ -313,3 +313,14 @@ Raw (truncated):
 2026-08-07 17:21:01,524 [INFO] english_daily: Daily article generated: id=1
 2026-08-07 17:21:01,537 [INFO] english_daily: Starting Waitress on http://0.0.0.0:5000
 2026-08-07 17:21:01,540 [INFO] waitress: Serving on http://0.0.0.0:5000
+2026-08-07 19:53:19,454 [INFO] english_daily: Application starting
+2026-08-07 19:53:19,467 [INFO] english_daily: SQLite database initialized at /var/data/english.db
+2026-08-07 20:03:01,596 [INFO] english_daily: Application starting
+2026-08-07 20:03:06,034 [INFO] english_daily: MySQL database initialized successfully
+2026-08-07 20:03:06,753 [INFO] english_daily: MySQL connection pool created (max 5 connections)
+2026-08-07 20:10:50,734 [INFO] english_daily: Application starting
+2026-08-07 20:10:55,012 [INFO] english_daily: MySQL database initialized successfully
+2026-08-07 20:10:55,738 [INFO] english_daily: MySQL connection pool created (max 5 connections)
+2026-08-07 20:11:30,510 [INFO] english_daily: Application starting
+2026-08-07 20:11:34,236 [INFO] english_daily: MySQL database initialized successfully
+2026-08-07 20:11:35,000 [INFO] english_daily: MySQL connection pool created (max 5 connections)
