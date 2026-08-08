@@ -1,15 +1,18 @@
 import json
 import os
+from functools import lru_cache
 
 from openai import OpenAI
 
 
+@lru_cache(maxsize=8)
 def _load_prompt_template(name):
     prompt_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "prompts")
     with open(os.path.join(prompt_dir, name), encoding="utf-8") as f:
         return f.read()
 
 
+@lru_cache(maxsize=1)
 def _get_client():
     return OpenAI(
         api_key=os.getenv("DEEPSEEK_API_KEY"),
@@ -17,6 +20,7 @@ def _get_client():
     )
 
 
+@lru_cache(maxsize=256)
 def review_translation(english_sentence, reference_translation, user_translation):
     template = _load_prompt_template("review_prompt.txt")
     prompt = template.format(
@@ -28,7 +32,7 @@ def review_translation(english_sentence, reference_translation, user_translation
     client = _get_client()
     resp = client.chat.completions.create(
         model="deepseek-chat",
-        max_tokens=1024,
+        max_tokens=512,
         temperature=0.4,
         messages=[{"role": "user", "content": prompt}],
         timeout=60,

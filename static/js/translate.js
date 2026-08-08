@@ -86,7 +86,14 @@ const TranslationExercise = (() => {
                 const err = await resp.json();
                 throw new Error(err.error || "请求失败");
             }
-            const data = await resp.json();
+            let data = await resp.json();
+            if (resp.status === 202 && data.job_id) {
+                data = await AIJobs.wait(data.job_id, (status) => {
+                    btn.innerHTML = status === "queued"
+                        ? '<span class="spinner-sm"></span> 排队中...'
+                        : '<span class="spinner-sm"></span> AI 批改中...';
+                });
+            }
 
             item.querySelectorAll(".exercise-input, .exercise-actions").forEach(el => el.remove());
             const div = document.createElement("div");

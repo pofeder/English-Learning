@@ -5,8 +5,28 @@
     let glossaryMap = new Map();
     let wordDefinitionMap = new Map();
     let ttsPlaying = false;
+    const ARTICLE_CACHE_KEY = "english_daily_article_v1";
+    const ARTICLE_CACHE_TTL_MS = 10 * 60 * 1000;
 
     const $ = (id) => document.getElementById(id);
+
+    function readCachedArticle() {
+        try {
+            const cached = JSON.parse(localStorage.getItem(ARTICLE_CACHE_KEY) || "null");
+            if (!cached || !cached.article || Date.now() - cached.savedAt > ARTICLE_CACHE_TTL_MS) return null;
+            return cached.article;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function saveCachedArticle(article) {
+        try {
+            localStorage.setItem(ARTICLE_CACHE_KEY, JSON.stringify({ savedAt: Date.now(), article }));
+        } catch (e) {
+            // Ignore quota/private-mode errors; the server cache still works.
+        }
+    }
 
     // ═══ Toast ════════════════════════════
     window.Toast = {
@@ -29,8 +49,7 @@
         setupTooltipCallback();
         setupDarkMode();
         const dashboardPromise = loadDashboardData();
-        await loadArchive();
-        await loadTodayArticle();
+        await Promise.all([loadArchive(), loadTodayArticle()]);
         setupArchiveChange();
         setupStatsModal();
         await loadCheckinStatus();
@@ -263,14 +282,22 @@
     async function loadTodayArticle() {
         showLoading(true);
         hideError();
+        const cachedArticle = readCachedArticle();
+        if (cachedArticle) {
+            renderArticle(cachedArticle);
+            showLoading(false);
+        }
         try {
             const resp = await fetch("/api/article/today");
             if (!resp.ok) {
+                if (cachedArticle) return;
                 if (resp.status === 404) showNoArticle();
                 else showError("加载文章失败，请刷新页面重试。");
                 return;
             }
-            renderArticle(await resp.json());
+            const article = await resp.json();
+            saveCachedArticle(article);
+            renderArticle(article);
         } catch (e) {
             showError("网络连接失败: " + e.message);
         } finally { showLoading(false); }

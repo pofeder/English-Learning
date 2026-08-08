@@ -123,14 +123,22 @@ def _fetch_article(db, sql, params):
         "explanation_cn FROM reading_questions WHERE article_id = %s",
         (article["id"],),
     )
-    # Attach answer records for each question
-    for q in article["reading_questions"]:
-        rec = _db_fetch_one(
+    # Fetch all latest answer records in one query instead of one query per question.
+    question_ids = [q["id"] for q in article["reading_questions"]]
+    latest_answers = {}
+    if question_ids:
+        placeholders = ", ".join(["%s"] * len(question_ids))
+        answer_rows = _db_fetch(
             db,
-            "SELECT user_answer, is_correct, answered_at FROM reading_answer_records "
-            "WHERE question_id = %s ORDER BY answered_at DESC LIMIT 1",
-            (q["id"],),
+            "SELECT question_id, user_answer, is_correct, answered_at "
+            f"FROM reading_answer_records WHERE question_id IN ({placeholders}) "
+            "ORDER BY answered_at DESC",
+            question_ids,
         )
+        for rec in answer_rows:
+            latest_answers.setdefault(rec["question_id"], rec)
+    for q in article["reading_questions"]:
+        rec = latest_answers.get(q["id"])
         q["user_answer"] = rec["user_answer"] if rec else None
         q["is_correct"] = rec["is_correct"] if rec else None
 

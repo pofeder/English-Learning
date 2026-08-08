@@ -84,6 +84,7 @@
     </div>
 </div>
 
+<script src="/static/js/ai_jobs.js?v=1"></script>
 <script>
 (() => {
     "use strict";
@@ -214,7 +215,14 @@
                 body: JSON.stringify({ exercise_id: currentExerciseId, essay }),
             });
             if (!resp.ok) throw new Error((await resp.json()).error);
-            const data = await resp.json();
+            let data = await resp.json();
+            if (resp.status === 202 && data.job_id) {
+                data = await AIJobs.wait(data.job_id, (status) => {
+                    btn.innerHTML = status === "queued"
+                        ? '<span class="spinner-sm"></span> 排队中...'
+                        : '<span class="spinner-sm"></span> AI 批改中...';
+                });
+            }
             renderFeedback(data);
         } catch (e) {
             alert("批改失败: " + e.message);

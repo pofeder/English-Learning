@@ -2,6 +2,7 @@ import json
 import re
 import os
 import logging
+from functools import lru_cache
 from datetime import datetime
 
 from openai import OpenAI
@@ -52,6 +53,7 @@ def _get_next_topic():
     return topic
 
 
+@lru_cache(maxsize=8)
 def _load_prompt_template(name):
     with open(os.path.join(_prompt_dir, name), encoding="utf-8") as f:
         return f.read()
@@ -65,6 +67,7 @@ def _parse_json_response(text):
     return json.loads(text)
 
 
+@lru_cache(maxsize=1)
 def _get_client():
     return OpenAI(
         api_key=os.getenv("DEEPSEEK_API_KEY"),

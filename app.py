@@ -1,6 +1,7 @@
 import os
 import json
 import logging
+import time
 from datetime import datetime
 
 from flask import Flask, g, render_template, request, jsonify, make_response
@@ -36,8 +37,25 @@ from article_store import (
 from word_cache import get as get_cached_word, set_value as cache_word
 from generator import generate_article
 from translate_service import review_translation
+from ai_jobs import submit_job, get_job
 
 app = Flask(__name__)
+
+
+@app.before_request
+def _start_request_timer():
+    g.request_started_at = time.perf_counter()
+
+
+@app.after_request
+def _finish_request_timer(response):
+    started_at = getattr(g, "request_started_at", None)
+    if started_at is not None:
+        elapsed_ms = (time.perf_counter() - started_at) * 1000
+        response.headers["X-Response-Time-ms"] = f"{elapsed_ms:.1f}"
+        if elapsed_ms >= 800:
+            logger.warning("Slow request: %s %s %.1fms", request.method, request.path, elapsed_ms)
+    return response
 
 logger.info("Application starting")
 
@@ -124,6 +142,14 @@ def api_health():
 
 
 # ── Article APIs ──────────────────────────────────────
+
+@app.route("/api/ai/jobs/<job_id>")
+def api_ai_job_status(job_id):
+    job = get_job(job_id)
+    if not job:
+        return jsonify({"error": "job not found"}), 404
+    return jsonify(job)
+
 
 @app.route("/api/article/today")
 def api_article_today():
@@ -243,6 +269,62 @@ def api_delete_word(word):
 # ── Translation APIs ──────────────────────────────────
 
 @app.route("/api/translate/submit", methods=["POST"])
+def api_translate_submit_async():
+    data = request.get_json() or {}
+    if "exercise_id" not in data or "user_translation" not in data:
+        return jsonify({"error": "missing required fields"}), 400
+
+    db = get_db()
+    exercise = _db_fetch_one(
+        db,
+        "SELECT * FROM translation_exercises WHERE id = %s",
+        (data["exercise_id"],),
+    )
+    if not exercise:
+        return jsonify({"error": "exercise not found"}), 404
+    if exercise["user_translation"] is not None:
+        return jsonify({"error": "exercise already submitted"}), 409
+
+    user_translation = str(data["user_translation"]).strip()
+    if not user_translation:
+        return jsonify({"error": "translation cannot be empty"}), 400
+
+    def run_translation_job():
+        job_db = get_connection()
+        try:
+            result = review_translation(
+                exercise["english_sentence"],
+                exercise["reference_translation"],
+                user_translation,
+            )
+            _db_execute(
+                job_db,
+                "UPDATE translation_exercises SET user_translation = %s, feedback = %s, "
+                "score = %s, submitted_at = %s WHERE id = %s",
+                (user_translation, result["feedback"], result["score"],
+                 datetime.now() if DB_TYPE == "mysql" else datetime.now().isoformat(),
+                 data["exercise_id"]),
+            )
+            job_db.commit()
+            clear_article_cache(exercise["article_id"])
+            return {
+                "feedback": result["feedback"],
+                "score": result["score"],
+                "key_issues": result.get("key_issues", []),
+                "reference_translation": exercise["reference_translation"],
+            }
+        finally:
+            job_db.close()
+
+    job_id = submit_job(
+        "translation",
+        run_translation_job,
+        dedupe_key=f"translation:{data['exercise_id']}",
+    )
+    return jsonify({"status": "queued", "job_id": job_id}), 202
+
+
+@app.route("/api/translate/submit-sync", methods=["POST"])
 def api_translate_submit():
     data = request.get_json()
     if not data or "exercise_id" not in data or "user_translation" not in data:
@@ -494,6 +576,88 @@ Output raw JSON only, no markdown fences."""
 
 
 @app.route("/api/writing/submit", methods=["POST"])
+def api_writing_submit_async():
+    data = request.get_json() or {}
+    if "exercise_id" not in data or "essay" not in data:
+        return jsonify({"error": "missing required fields"}), 400
+
+    db = get_db()
+    exercise = _db_fetch_one(
+        db,
+        "SELECT * FROM writing_exercises WHERE id = %s",
+        (data["exercise_id"],),
+    )
+    if not exercise:
+        return jsonify({"error": "exercise not found"}), 404
+
+    essay = str(data["essay"]).strip()
+    if not essay:
+        return jsonify({"error": "essay cannot be empty"}), 400
+
+    def run_writing_job():
+        from generator import _get_client, _parse_json_response
+
+        review_prompt = f"""You are a 考研 English writing grader. Evaluate the student's essay.
+
+Prompt: {exercise["prompt_cn"]}
+Requirements: {exercise.get("requirements", "")}
+Reference Essay: {exercise.get("reference_essay", "")}
+
+Student's Essay: {essay}
+
+Score on these dimensions (each 1-10):
+1. Content: Does it address all points in the prompt?
+2. Structure: Is the organization clear and logical?
+3. Language: Vocabulary variety, sentence complexity, academic register
+4. Grammar: Grammatical accuracy
+
+Output JSON:
+{{
+  "score": <overall score 1-10>,
+  "content_score": <1-10>,
+  "structure_score": <1-10>,
+  "language_score": <1-10>,
+  "grammar_score": <1-10>,
+  "feedback": "detailed feedback in Chinese, 150-300 chars",
+  "corrections": ["specific correction 1", "correction 2", "correction 3"]
+}}
+
+Output raw JSON only, no markdown fences."""
+
+        client = _get_client()
+        resp = client.chat.completions.create(
+            model="deepseek-chat",
+            max_tokens=768,
+            temperature=0.3,
+            messages=[{"role": "user", "content": review_prompt}],
+            timeout=120,
+        )
+        result = _parse_json_response(resp.choices[0].message.content)
+
+        job_db = get_connection()
+        try:
+            now_str = datetime.now() if DB_TYPE == "mysql" else datetime.now().isoformat()
+            _db_execute(
+                job_db,
+                "INSERT INTO writing_submissions (exercise_id, user_essay, score, feedback, submitted_at) "
+                "VALUES (%s, %s, %s, %s, %s)",
+                (data["exercise_id"], essay, result.get("score"),
+                 json.dumps(result, ensure_ascii=False), now_str),
+            )
+            job_db.commit()
+            return result
+        finally:
+            job_db.close()
+
+    job_id = submit_job(
+        "writing",
+        run_writing_job,
+        dedupe_key=f"writing:{data['exercise_id']}",
+    )
+    return jsonify({"status": "queued", "job_id": job_id}), 202
+
+
+@app.route("/api/writing/submit-sync", methods=["POST"])
 def api_writing_submit():
     """Submit user essay for AI review."""
     data = request.get_json()
@@ -538,7 +702,7 @@ Output raw JSON only, no markdown fences."""
     try:
         resp = client.chat.completions.create(
             model="deepseek-chat",
-            max_tokens=1024,
+            max_tokens=768,
             temperature=0.3,
             messages=[{"role": "user", "content": review_prompt}],
             timeout=120,
@@ -586,9 +750,14 @@ def api_flashcard_due():
     now_str = datetime.now() if DB_TYPE == "mysql" else datetime.now().isoformat()
 
     # First, seed spaced_repetition from word_lookups for new words
+    seed_sql = (
+        "INSERT IGNORE INTO spaced_repetition "
+        if DB_TYPE == "mysql"
+        else "INSERT OR IGNORE INTO spaced_repetition "
+    )
     _db_execute(
         db,
-        "INSERT OR IGNORE INTO spaced_repetition (word, ease_factor, interval_days, repetitions, next_review_at) "
+        seed_sql + "(word, ease_factor, interval_days, repetitions, next_review_at) "
         "SELECT LOWER(wl.word), 2.5, 0, 0, '2020-01-01' "
         "FROM word_lookups wl WHERE wl.status IN ('unfamiliar', 'learning') "
         "AND LOWER(wl.word) NOT IN (SELECT LOWER(sr.word) FROM spaced_repetition sr)"

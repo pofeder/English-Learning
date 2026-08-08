@@ -448,6 +448,20 @@ def _init_mysql():
                 cur.execute("CREATE INDEX idx_glossary_word ON glossary(word)")
             except Exception:
                 pass
+            mysql_indexes = [
+                "CREATE INDEX idx_articles_created_at ON articles(created_at)",
+                "CREATE INDEX idx_reading_answer_q_time ON reading_answer_records(question_id, answered_at)",
+                "CREATE INDEX idx_cloze_answer_id_time ON cloze_answer_records(cloze_id, submitted_at)",
+                "CREATE INDEX idx_writing_submission_ex_time ON writing_submissions(exercise_id, submitted_at)",
+                "CREATE INDEX idx_word_lookup_status_count ON word_lookups(status, lookup_count)",
+                "CREATE INDEX idx_spaced_review_due ON spaced_repetition(next_review_at)",
+            ]
+            for statement in mysql_indexes:
+                try:
+                    cur.execute(statement)
+                except Exception:
+                    # Existing indexes are harmless; keep startup safe.
+                    pass
         conn.commit()
         logger.info("MySQL database initialized successfully")
     finally:
